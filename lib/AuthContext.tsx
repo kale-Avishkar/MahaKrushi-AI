@@ -1,60 +1,68 @@
 'use client';
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
-import { getToken, clearTokens, getUser } from './api';
+import { useRouter } from 'next/navigation';
+import type { User, Session } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
+import { signOut } from '@/services/auth';
 
-interface User {
-  id: string | number;
-  full_name: string;
-  role: string;
-}
+// ─── Types ─────────────────────────────────────────────────────────────────────
 
 interface AuthContextType {
   user: User | null;
+  session: Session | null;
   loading: boolean;
-  logout: () => void;
-  refreshSession: () => void;
+  logout: () => Promise<void>;
 }
+
+// ─── Context ───────────────────────────────────────────────────────────────────
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
+  session: null,
   loading: true,
-  logout: () => {},
-  refreshSession: () => {}
+  logout: async () => {},
 });
 
+// ─── Provider ──────────────────────────────────────────────────────────────────
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUserState] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
-  const pathname = usePathname();
-
-  const refreshSession = () => {
-    const token = getToken();
-    const storedUser = getUser();
-    if (token && storedUser) {
-      setUserState(storedUser);
-    } else {
-      setUserState(null);
-    }
-    setLoading(false);
-  };
 
   useEffect(() => {
-    refreshSession();
-  }, [pathname]); // Refresh session check on nav
+    // 1️⃣ Restore session immediately on mount (handles page reload)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      setLoading(false);
+    });
 
-  const logout = () => {
-    clearTokens();
-    setUserState(null);
+    // 2️⃣ Subscribe to auth state changes (login, logout, token refresh)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      setUser(session?.user ?? null);
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const logout = async () => {
+    await signOut();
+    setUser(null);
+    setSession(null);
     router.push('/auth');
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, logout, refreshSession }}>
+    <AuthContext.Provider value={{ user, session, loading, logout }}>
       {children}
     </AuthContext.Provider>
   );
 }
+
+// ─── Hook ──────────────────────────────────────────────────────────────────────
 
 export const useAuth = () => useContext(AuthContext);

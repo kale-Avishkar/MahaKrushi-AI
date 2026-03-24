@@ -83,8 +83,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
                   <span style={{ fontSize: '1.2rem' }}>👨‍🌾</span>
                   <div style={{ overflow: 'hidden' }}>
-                    <div style={{ fontSize: '0.85rem', color: '#e2e8d0', fontWeight: 600, whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{user.full_name || 'Farmer'}</div>
-                    <div style={{ fontSize: '0.65rem', color: '#10b981', textTransform: 'capitalize' }}>{user.role} Acc.</div>
+                    <div style={{ fontSize: '0.85rem', color: '#e2e8d0', fontWeight: 600, whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{user.user_metadata?.full_name || user.email?.split('@')[0] || 'Farmer'}</div>
+                    <div style={{ fontSize: '0.65rem', color: '#10b981', textTransform: 'capitalize' }}>{user.user_metadata?.role || 'farmer'} Acc.</div>
                   </div>
                 </div>
                 <button onClick={logout} style={{ width: '100%', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', padding: '0.4rem', borderRadius: '0.4rem', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}>
