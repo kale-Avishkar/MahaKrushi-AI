@@ -26,7 +26,7 @@ export default function AuthPage() {
   const [info, setInfo]       = useState(''); // non-error informational message
 
   const [form, setForm] = useState({
-    email:     '',
+    mobile:     '',
     password:  '',
     full_name: '',
   });
@@ -37,8 +37,8 @@ export default function AuthPage() {
 
   // ── Validation ──────────────────────────────────────────────────────────────
   const validate = (): string | null => {
-    if (!form.email.trim())    return 'Email address is required.';
-    if (!/\S+@\S+\.\S+/.test(form.email)) return 'Please enter a valid email address.';
+    if (!form.mobile.trim())    return 'Mobile number is required.';
+    if (!/^\d{10}$/.test(form.mobile.trim())) return 'Please enter a valid 10-digit mobile number.';
     if (!form.password)        return 'Password is required.';
     if (form.password.length < 6) return 'Password must be at least 6 characters.';
     if (mode === 'register' && !form.full_name.trim()) return 'Full name is required.';
@@ -55,13 +55,13 @@ export default function AuthPage() {
     setLoading(true);
     try {
       if (mode === 'login') {
-        const { error: authError } = await signIn(form.email.trim(), form.password);
+        const { error: authError } = await signIn(form.mobile.trim(), form.password);
         if (authError) { setError(authError.message); return; }
         router.push('/dashboard');
 
       } else {
         const { error: authError } = await signUp({
-          email:            form.email.trim(),
+          mobile:           form.mobile.trim(),
           password:         form.password,
           fullName:         form.full_name.trim(),
           role,
@@ -198,15 +198,15 @@ export default function AuthPage() {
               </>
             )}
 
-            {/* ── Email ── */}
+            {/* ── Mobile ── */}
             <div>
-              <label style={labelStyle}>Email Address</label>
+              <label style={labelStyle}>Mobile Number</label>
               <input
-                value={form.email}
-                onChange={update('email')}
-                type="email"
-                placeholder="ramesh@example.com"
-                autoComplete={mode === 'login' ? 'email' : 'email'}
+                value={form.mobile}
+                onChange={update('mobile')}
+                type="tel"
+                placeholder="9876543210"
+                autoComplete={mode === 'login' ? 'tel' : 'tel'}
                 style={inputStyle}
               />
             </div>

@@ -1,15 +1,19 @@
 'use client';
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import type { User, Session } from '@supabase/supabase-js';
-import { supabase } from '@/lib/supabase';
+import { useRouter, usePathname } from 'next/navigation';
 import { signOut } from '@/services/auth';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
+export interface User {
+  id: string | number;
+  full_name: string;
+  role: string;
+  mobile?: string;
+}
+
 interface AuthContextType {
   user: User | null;
-  session: Session | null;
   loading: boolean;
   logout: () => Promise<void>;
 }
@@ -18,7 +22,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
-  session: null,
   loading: true,
   logout: async () => {},
 });
@@ -27,37 +30,52 @@ const AuthContext = createContext<AuthContextType>({
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
-    // 1️⃣ Restore session immediately on mount (handles page reload)
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    // Check localStorage for user session
+    const storedUser = localStorage.getItem('mk_user');
+    
+    if (storedUser) {
+      try {
+        const parsed = JSON.parse(storedUser);
+        setUser(parsed);
+      } catch (e) {
+        localStorage.removeItem('mk_user');
+        localStorage.removeItem('mk_access_token');
+        localStorage.removeItem('mk_refresh_token');
+      }
+    }
+    
+    setLoading(false);
+  }, [pathname]);
 
-    // 2️⃣ Subscribe to auth state changes (login, logout, token refresh)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+  // Client-side route protection
+  useEffect(() => {
+    if (loading) return;
+    
+    const isDashboard = pathname?.startsWith('/dashboard') || pathname?.startsWith('/owner');
+    const isAuthPage = pathname?.startsWith('/auth');
 
-    return () => subscription.unsubscribe();
-  }, []);
+    if (!user && isDashboard) {
+      router.push('/auth');
+    }
+
+    if (user && isAuthPage) {
+      router.push('/dashboard');
+    }
+  }, [user, loading, pathname, router]);
 
   const logout = async () => {
     await signOut();
     setUser(null);
-    setSession(null);
     router.push('/auth');
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, logout }}>
+    <AuthContext.Provider value={{ user, loading, logout }}>
       {children}
     </AuthContext.Provider>
   );

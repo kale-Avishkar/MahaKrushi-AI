@@ -1,108 +1,97 @@
 /**
  * MahaKrushi AI – Auth Service
  *
- * All Supabase auth operations go through here.
- * Returns { data, error } with user-friendly error messages.
+ * Modified to use local FastAPI backend instead of Supabase.
  */
-import { supabase } from '@/lib/supabase';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
 
 export interface AuthError {
-  message: string;          // user-facing message
-  devMessage?: string;      // raw error (only log in dev)
+  message: string;
 }
 
 export interface SignUpOptions {
-  email: string;
+  mobile: string;
   password: string;
   fullName: string;
   role: 'farmer' | 'equipment_owner' | 'storage_owner';
   preferredLanguage?: string;
 }
 
-// ─── Error translator ─────────────────────────────────────────────────────────
-
-function toUserMessage(raw: string | undefined): string {
-  if (!raw) return 'An unexpected error occurred. Please try again.';
-  const r = raw.toLowerCase();
-
-  if (r.includes('invalid login credentials') || r.includes('invalid email or password'))
-    return 'Incorrect email or password. Please try again.';
-  if (r.includes('email not confirmed'))
-    return 'Please confirm your email before logging in. Check your inbox.';
-  if (r.includes('user already registered') || r.includes('already been registered'))
-    return 'This email is already registered. Please log in instead.';
-  if (r.includes('password should be at least') || r.includes('weak password'))
-    return 'Password is too weak. Use at least 6 characters.';
-  if (r.includes('signup is disabled') || r.includes('signups not allowed'))
-    return 'New registrations are currently disabled. Please contact support.';
-  if (r.includes('network') || r.includes('fetch') || r.includes('failed to fetch'))
-    return 'Network error. Check your internet connection and try again.';
-  if (r.includes('rate limit'))
-    return 'Too many attempts. Please wait a minute and try again.';
-  if (r.includes('email address') && r.includes('invalid'))
-    return 'Please enter a valid email address.';
-
-  return raw; // fallback to raw if nothing matched
-}
-
-// ─── Sign In ──────────────────────────────────────────────────────────────────
-
-export async function signIn(email: string, password: string) {
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-
-  if (error) {
-    if (process.env.NODE_ENV === 'development') {
-      console.error('[MahaKrushi Auth] signIn error:', error.message);
+export async function signIn(mobile: string, password: string) {
+  try {
+    const res = await fetch(`${API_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mobile, password })
+    });
+    
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      return { data: null, error: { message: errData.detail || 'Invalid mobile or password' } };
     }
-    return { data: null, error: { message: toUserMessage(error.message), devMessage: error.message } as AuthError };
+    
+    const data = await res.json();
+    // Save token
+    const userData = {
+      id: data.user_id,
+      full_name: data.full_name,
+      role: data.role,
+      mobile: mobile,
+    };
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('mk_access_token', data.access_token);
+      localStorage.setItem('mk_refresh_token', data.refresh_token);
+      localStorage.setItem('mk_user', JSON.stringify(userData));
+    }
+    return { data, error: null };
+  } catch (error: any) {
+    return { data: null, error: { message: 'Network error. Backend might be unreachable.' } };
   }
-
-  return { data, error: null };
 }
 
-// ─── Sign Up ──────────────────────────────────────────────────────────────────
-
-export async function signUp({ email, password, fullName, role, preferredLanguage = 'mr' }: SignUpOptions) {
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      data: {
+export async function signUp({ mobile, password, fullName, role, preferredLanguage = 'mr' }: SignUpOptions) {
+  try {
+    const res = await fetch(`${API_URL}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        mobile,
+        password,
         full_name: fullName,
         role,
-        preferred_language: preferredLanguage,
-      },
-    },
-  });
+        preferred_language: preferredLanguage
+      })
+    });
 
-  if (error) {
-    if (process.env.NODE_ENV === 'development') {
-      console.error('[MahaKrushi Auth] signUp error:', error.message);
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      return { data: null, error: { message: errData.detail || 'Registration failed' } };
     }
-    return { data: null, error: { message: toUserMessage(error.message), devMessage: error.message } as AuthError };
-  }
 
-  // Supabase returns a user with no session when email confirmation is required
-  if (data.user && !data.session) {
-    return {
-      data,
-      error: {
-        message: 'Almost there! Check your email inbox to confirm your account, then log in.',
-      } as AuthError,
+    const data = await res.json();
+    const userData = {
+      id: data.user_id,
+      full_name: data.full_name,
+      role: data.role,
+      mobile: mobile,
     };
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('mk_access_token', data.access_token);
+      localStorage.setItem('mk_refresh_token', data.refresh_token);
+      localStorage.setItem('mk_user', JSON.stringify(userData));
+    }
+    return { data, error: null };
+  } catch (error: any) {
+    return { data: null, error: { message: 'Network error. Backend might be unreachable.' } };
   }
-
-  return { data, error: null };
 }
 
-// ─── Sign Out ─────────────────────────────────────────────────────────────────
-
 export async function signOut() {
-  const { error } = await supabase.auth.signOut();
-  if (error && process.env.NODE_ENV === 'development') {
-    console.error('[MahaKrushi Auth] signOut error:', error.message);
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('mk_access_token');
+    localStorage.removeItem('mk_refresh_token');
+    localStorage.removeItem('mk_user');
   }
-  return { error };
+  return { error: null };
 }
